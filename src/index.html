@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Simple Student Information System | SSIS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Simple Student Information System" />
+    <meta name="keywords" content="SSIS, Student Information System" />
+    <link rel="icon" href="./assets/favicon.ico" />
+  </head>
+  <body>
+    <div class="modal">
+      <div class="modal-background"></div>
+      <button class="modal-close is-large" aria-label="close"></button>
+      <div class="modal-card">
+        <header class="modal-card-head">
+          <p id="modalTitle" class="modal-card-title">Modal title</p>
+        </header>
+        <section id="modalContent" class="modal-card-body"></section>
+        <footer id="modalFooter" class="modal-card-foot"></footer>
+      </div>
+    </div>
+
+    <main class="container is-max-desktop py-5">
+      <h1 class="title has-text-weight-bold is-1 has-text-primary-dark has-text-centered">
+        Simple Student Information System
+      </h1>
+
+      <div class="py-5">
+        <h1 class="title has-text-weight-bold mt-5 is-uppercase is-2">
+          Students
+        </h1>
+        <div class="buttons">
+          <button id="add-student" class="button is-primary">
+            Add Student
+          </button>
+        </div>
+        <ul id="student-list" class="my-5"></ul>
+        <hr style="margin: 5rem 0rem" />
+        <h1 class="title has-text-weight-bold is-uppercase is-2">Colleges</h1>
+        <div class="buttons">
+          <button id="add-college" class="button is-primary">
+            Add College
+          </button>
+        </div>
+        <ul id="college-list" class="my-5"></ul>
+      </div>
+    </main>
+  </body>
+</html>
