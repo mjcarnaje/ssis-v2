@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain } from "electron";
-import path from "path";
 import { CollegeEvent, CourseEvent, StudentEvent } from "./constant/events";
 import { CollegeService } from "./services/CollegeService";
 import { CourseService } from "./services/CourseService";
@@ -18,10 +17,7 @@ const createWindow = (): void => {
   const mainWindow = new BrowserWindow({
     height: 900,
     width: 1440,
-    icon: path.join(
-      __dirname,
-      "../assets/icons/Square44x44Logo.targetsize-256.png"
-    ),
+    icon: "src/assets/icons/icon.png",
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       webSecurity: false,
@@ -46,8 +42,7 @@ app.on("activate", () => {
 });
 
 app.whenReady().then(() => {
-  const dbPath = path.join(app.getPath("userData"), "db.sqlite");
-  const dsService = new DataStorageService(dbPath);
+  const dsService = new DataStorageService("ssis.db");
   const sService = new StudentService(dsService);
   const cService = new CollegeService(dsService);
   const crService = new CourseService(dsService);
