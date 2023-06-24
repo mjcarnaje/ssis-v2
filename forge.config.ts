@@ -18,8 +18,16 @@ const config: ForgeConfig = {
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ["darwin"]),
-    new MakerRpm({}),
-    new MakerDeb({}),
+    new MakerRpm({
+      options: {
+        icon: "src/assets/icons/icon.png",
+      },
+    }),
+    new MakerDeb({
+      options: {
+        icon: "src/assets/icons/icon.png",
+      },
+    }),
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
