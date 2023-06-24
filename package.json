@@ -1,7 +1,7 @@
 {
-  "name": "ssis",
-  "productName": "ssis",
-  "version": "1.0.0",
+  "name": "ssis-version-2.0",
+  "productName": "SSIS 2.0",
+  "version": "2.0.0",
   "description": "A simple student information system",
   "main": ".webpack/main",
   "scripts": {

@@ -937,7 +937,7 @@ function createStudentTemplate(student: IStudent) {
   const fullName = `${student.firstName} ${student.lastName}`;
 
   const template = `
-  <div class="card">
+  <div class="card border is-rounded">
     <div class="card-content">
       <div class="is-flex is-align-items-center is-justify-content-center mb-5">
         <img class="image is-128x128 is-rounded " style="object-fit: cover; border: 1px solid #ccc;" src="${student.photo}" />
@@ -1084,7 +1084,7 @@ function createCollegeTemplate(college: ICollege, courses: ICourse[]) {
 function renderColleges() {
   if (states.colleges.length === 0) {
     collegeList.innerHTML = `
-      <div class="is-flex box is-justify-content-center is-align-items-center">
+      <div class="is-flex py-5 border is-rounded is-justify-content-center is-align-items-center">
         <h1 class="is-size-3">No colleges found</h1>
       </div>
     `;
