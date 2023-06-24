@@ -1,10 +1,10 @@
 import { app, BrowserWindow, ipcMain } from "electron";
+import path from "path";
 import { CollegeEvent, CourseEvent, StudentEvent } from "./constant/events";
 import { CollegeService } from "./services/CollegeService";
 import { CourseService } from "./services/CourseService";
 import { DataStorageService } from "./services/DataStorageService";
 import { StudentService } from "./services/StudentService";
-import path from "path";
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -46,12 +46,14 @@ app.on("activate", () => {
 });
 
 app.whenReady().then(() => {
-  const dsService = new DataStorageService();
+  const dbPath = path.join(app.getPath("userData"), "db.sqlite");
+  const dsService = new DataStorageService(dbPath);
   const sService = new StudentService(dsService);
   const cService = new CollegeService(dsService);
   const crService = new CourseService(dsService);
 
-  dsService.createDbTextFiles();
+  dsService.createTables();
+
   dsService.createStorageDirectory();
   ipcMain.handle(StudentEvent.CheckCanAdd, sService.checkCanAddStudent);
   ipcMain.handle(StudentEvent.GetStudents, sService.getStudents);

@@ -31,6 +31,7 @@ export interface ICollegeWithCourses extends ICollege {
 }
 
 export interface IStudentWithCollegeCourse extends IStudent {
-  college: ICollege;
-  course: ICourse;
+  collegeLogo: string;
+  collegeName: string;
+  courseName: string;
 }

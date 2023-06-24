@@ -1,5 +1,4 @@
-import { ICollege, ICourse, IStudent } from "../types";
-import { saveImage } from "../utils/saveImage";
+import { ICollege, ICollegeWithCourses, ICourse } from "../types";
 import { DataStorageService } from "./DataStorageService";
 
 class CollegeService {
@@ -10,47 +9,74 @@ class CollegeService {
   }
 
   getColleges = async (_: Electron.IpcMainInvokeEvent): Promise<ICollege[]> => {
-    console.log("GET: colleges");
-    return this.dsService.getDbFileContent<ICollege>("colleges");
+    const colleges = this.dsService
+      .getDatabase()
+      .prepare(`SELECT * FROM Colleges`)
+      .all() as ICollege[];
+
+    return colleges;
   };
 
   getCollegeCourses = async (
     _: Electron.IpcMainInvokeEvent,
     collegeId: string
   ): Promise<ICourse[]> => {
-    console.log(`GET: college courses ${collegeId}`);
-    const courses = this.dsService.getDbFileContent<ICourse>("courses");
-    return courses.filter((course) => course.collegeId === collegeId);
+    const statement = this.dsService
+      .getDatabase()
+      .prepare<string>(`SELECT * FROM Courses WHERE collegeId = ?`);
+
+    const courses = statement.all(collegeId) as ICourse[];
+
+    return courses;
   };
 
   getCollegesWithCourses = async (
     _: Electron.IpcMainInvokeEvent
-  ): Promise<ICollege[]> => {
-    console.log("GET: colleges and its courses");
-    const colleges = this.dsService.getDbFileContent<ICollege>("colleges");
-    const courses = this.dsService.getDbFileContent<ICourse>("courses");
+  ): Promise<ICollegeWithCourses[]> => {
+    const collegesStatement = this.dsService
+      .getDatabase()
+      .prepare(`SELECT * FROM Colleges`);
 
-    return colleges.map((college) => ({
-      ...college,
-      courses: courses.filter((course) => course.collegeId === college.id),
-    }));
+    const colleges = collegesStatement.all() as ICollege[];
+
+    const coursesStatement = this.dsService
+      .getDatabase()
+      .prepare(`SELECT * FROM Courses`);
+
+    const courses = coursesStatement.all() as ICourse[];
+
+    const collegesWithCourses = colleges.map((college) => {
+      const collegeCourses = courses.filter(
+        (course) => course.collegeId === college.id
+      );
+
+      return {
+        ...college,
+        courses: collegeCourses,
+      } as ICollegeWithCourses;
+    });
+
+    return collegesWithCourses;
   };
 
   addCollege = async (_: Electron.IpcMainInvokeEvent, college: ICollege) => {
-    console.log(`POST: Add college ${college.name}`);
+    console.log("Adding college", college);
 
-    const colleges = this.dsService.getDbFileContent<ICollege>("colleges");
-    const existingCollege = colleges.find(
-      (existingCollege) => existingCollege.name === college.name
+    const statement = this.dsService
+      .getDatabase()
+      .prepare(
+        "INSERT INTO Colleges (id, name, abbreviation, logo) VALUES (?, ?, ?, ?)"
+      );
+
+    const result = statement.run(
+      college.id,
+      college.name,
+      college.abbreviation,
+      college.logo
     );
 
-    if (existingCollege) {
-      throw new Error(`College with name ${college.name} already exists`);
-    }
-
     this.dsService.createSubDirectoryStorage(college.id);
-    await saveImage(college, null, "logo");
-    this.dsService.appendDataToDbFile("colleges", college);
+    console.log("Added college", result);
 
     return college;
   };
@@ -59,23 +85,13 @@ class CollegeService {
     _: Electron.IpcMainInvokeEvent,
     college: ICollege
   ): Promise<ICollege> => {
-    console.log(`PUT: Update college ${college.name}`);
+    const statement = this.dsService
+      .getDatabase()
+      .prepare(
+        `UPDATE Colleges SET name = ?, logo = ?, abbreviation = ?, WHERE id = ?`
+      );
 
-    const colleges = this.dsService.getDbFileContent<ICollege>("colleges");
-    const existingCollegeIndex = colleges.findIndex(
-      (existingCollege) => existingCollege.id === college.id
-    );
-
-    if (existingCollegeIndex === -1) {
-      throw new Error(`College with id ${college.id} does not exist`);
-    }
-
-    await saveImage(college, colleges[existingCollegeIndex], "logo");
-
-    const updatedColleges = [...colleges];
-    updatedColleges[existingCollegeIndex] = college;
-
-    this.dsService.updateDbFile("colleges", updatedColleges);
+    statement.run(college.name, college.logo, college.abbreviation, college.id);
 
     return college;
   };
@@ -84,39 +100,29 @@ class CollegeService {
     _: Electron.IpcMainInvokeEvent,
     id: string
   ): Promise<ICollege> => {
-    console.log(`DELETE: Delete college ${id}`);
+    try {
+      console.log("Deleting college", id);
 
-    const colleges = this.dsService.getDbFileContent<ICollege>("colleges");
-    const existingCollege = colleges.find((college) => college.id === id);
+      const statement = this.dsService
+        .getDatabase()
+        .prepare(`DELETE FROM Colleges WHERE id = ?`);
 
-    if (!existingCollege) {
-      throw new Error(`College with ID ${id} does not exist`);
+      const result = statement.run(id);
+
+      await this.dsService.deleteSubDirectoryStorage(id);
+
+      console.log("Deleted college", result);
+
+      return { id } as ICollege;
+    } catch (err) {
+      if (err.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+        throw new Error(
+          "You cannot delete a college that has students or courses"
+        );
+      }
+
+      throw err;
     }
-
-    const courses = this.dsService.getDbFileContent<ICourse>("courses");
-    const hasCourses = courses.some((course) => course.collegeId === id);
-
-    if (hasCourses) {
-      throw new Error(
-        `Cannot delete college ${existingCollege.name}. It has associated courses.`
-      );
-    }
-
-    const students = this.dsService.getDbFileContent<IStudent>("students");
-    const hasStudents = students.some((student) => student.collegeId === id);
-
-    if (hasStudents) {
-      throw new Error(
-        `Cannot delete college ${existingCollege.name}. It has associated students.`
-      );
-    }
-
-    const filteredColleges = colleges.filter((college) => college.id !== id);
-
-    this.dsService.updateDbFile("colleges", filteredColleges);
-    await this.dsService.deleteSubDirectoryStorage(id);
-
-    return existingCollege;
   };
 }
 

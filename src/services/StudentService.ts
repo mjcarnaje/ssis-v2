@@ -1,9 +1,4 @@
-import {
-  ICollege,
-  ICourse,
-  IStudent,
-  IStudentWithCollegeCourse,
-} from "../types";
+import { IStudent, IStudentWithCollegeCourse } from "../types";
 import { saveImage } from "../utils/saveImage";
 import { DataStorageService } from "./DataStorageService";
 
@@ -17,71 +12,76 @@ class StudentService {
   checkCanAddStudent = async (
     _: Electron.IpcMainInvokeEvent
   ): Promise<boolean> => {
-    const colleges = this.dsService.getDbFileContent<ICollege>("colleges");
-    const courses = this.dsService.getDbFileContent<ICourse>("courses");
+    const colleges = this.dsService
+      .getDatabase()
+      .prepare("SELECT * FROM Colleges")
+      .all();
+
+    const courses = this.dsService
+      .getDatabase()
+      .prepare("SELECT * FROM Courses")
+      .all();
+
     return colleges.length > 0 && courses.length > 0;
   };
 
   getStudents = async (_: Electron.IpcMainInvokeEvent): Promise<IStudent[]> => {
-    console.log("GET: students test");
-    console.log("TYpe" + typeof this.dsService);
-    console.log("GET: students");
-    return this.dsService.getDbFileContent<IStudent>("students");
+    console.log("Getting students");
+
+    const students = this.dsService
+      .getDatabase()
+      .prepare(`SELECT * FROM Students`)
+      .all() as IStudent[];
+
+    return students;
   };
 
   getStudent = async (
     _: Electron.IpcMainInvokeEvent,
     id: string
   ): Promise<IStudentWithCollegeCourse> => {
-    console.log(`GET: student ${id}`);
-    const students = this.dsService.getDbFileContent<IStudent>("students");
-    const student = students.find((student) => student.id === id);
+    const statement = this.dsService
+      .getDatabase()
+      .prepare<string>(
+        "SELECT Students.*, Colleges.name AS collegeName, Colleges.logo AS collegeLogo, Courses.name AS courseName FROM Students INNER JOIN Colleges ON Students.collegeId = Colleges.id INNER JOIN Courses ON Students.courseId = Courses.id WHERE Students.id = ?"
+      );
 
-    if (!student) {
-      throw new Error(`Student with id ${id} not found`);
-    }
+    const student = statement.get(id) as IStudentWithCollegeCourse;
 
-    const colleges = this.dsService.getDbFileContent<ICollege>("colleges");
-    const courses = this.dsService.getDbFileContent<ICourse>("courses");
+    console.log("Got student", student);
 
-    const college = colleges.find(
-      (college) => college.id === student.collegeId
-    );
-    const course = courses.find((course) => course.id === student.courseId);
-
-    if (!college) {
-      throw new Error(`College with id ${student.collegeId} not found`);
-    }
-
-    if (!course) {
-      throw new Error(`Course with id ${student.courseId} not found`);
-    }
-
-    return {
-      ...student,
-      college,
-      course,
-    };
+    return student;
   };
 
   addStudent = async (
     _: Electron.IpcMainInvokeEvent,
     student: IStudent
   ): Promise<IStudent> => {
-    console.log(`POST: Add student ${student.studentId}`);
+    console.log("Adding student", student);
 
-    const students = this.dsService.getDbFileContent<IStudent>("students");
-    const existingStudent = students.find(
-      (existingStudent) => existingStudent.studentId === student.studentId
-    );
-
-    if (existingStudent) {
-      throw new Error(`Student with id ${student.studentId} already exists`);
-    }
+    const statement = this.dsService
+      .getDatabase()
+      .prepare(
+        "INSERT INTO Students (id, studentId, firstName, lastName, gender, birthday, photo, collegeId, courseId, year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      );
 
     this.dsService.createSubDirectoryStorage(student.id);
     await saveImage(student, null, "photo");
-    this.dsService.appendDataToDbFile("students", student);
+
+    const result = statement.run(
+      student.id,
+      student.studentId,
+      student.firstName,
+      student.lastName,
+      student.gender,
+      student.birthday,
+      student.photo,
+      student.collegeId,
+      student.courseId,
+      student.year
+    );
+
+    console.log("Added student", result);
 
     return student;
   };
@@ -90,25 +90,36 @@ class StudentService {
     _: Electron.IpcMainInvokeEvent,
     student: IStudent
   ): Promise<IStudent> => {
-    console.log(`PUT: Update student ${student.studentId}`);
+    console.log("Updating student", student);
 
-    const students = this.dsService.getDbFileContent<IStudent>("students");
-    console.log({ students });
-    const existingStudentIndex = students.findIndex(
-      (existingStudent) => existingStudent.id === student.id
+    const getStudentStatement = this.dsService
+      .getDatabase()
+      .prepare("SELECT * FROM Students WHERE id != ?");
+
+    const existingStudent = getStudentStatement.get(student.id) as IStudent;
+
+    await saveImage(existingStudent, student, "photo");
+
+    const statement = this.dsService
+      .getDatabase()
+      .prepare(
+        "UPDATE Students SET studentId = ?, firstName = ?, lastName = ?, gender = ?, birthday = ?, photo = ?, collegeId = ?, courseId = ?, year = ? WHERE id = ?"
+      );
+
+    const result = statement.run(
+      student.studentId,
+      student.firstName,
+      student.lastName,
+      student.gender,
+      student.birthday,
+      student.photo,
+      student.collegeId,
+      student.courseId,
+      student.year,
+      student.id
     );
 
-    if (existingStudentIndex === -1) {
-      throw new Error(`Student with id ${student.studentId} does not exist`);
-    }
-
-    const updatedStudents = [...students];
-
-    await saveImage(student, students[existingStudentIndex], "photo");
-
-    updatedStudents[existingStudentIndex] = student;
-
-    this.dsService.updateDbFile("students", updatedStudents);
+    console.log("Updated student", result);
 
     return student;
   };
@@ -117,26 +128,18 @@ class StudentService {
     _: Electron.IpcMainInvokeEvent,
     id: string
   ): Promise<IStudent> => {
-    console.log(`DELETE: Delete student ${id}`);
+    console.log("Deleting student", id);
 
-    const students = this.dsService.getDbFileContent<IStudent>("students");
-    const existingStudent = students.find(
-      (existingStudent) => existingStudent.id === id
-    );
+    const statement = this.dsService
+      .getDatabase()
+      .prepare<string>("DELETE FROM Students WHERE id = ?");
 
-    if (!existingStudent) {
-      throw new Error(`Student with id ${id} does not exist`);
-    }
-
-    const filteredStudents = students.filter(
-      (existingStudent) => existingStudent.id !== id
-    );
-
-    this.dsService.updateDbFile("students", filteredStudents);
-
+    const result = statement.run(id);
     await this.dsService.deleteSubDirectoryStorage(id);
 
-    return existingStudent;
+    console.log("Deleted student", result);
+
+    return { id } as IStudent;
   };
 }
 

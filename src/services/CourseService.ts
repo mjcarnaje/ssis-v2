@@ -1,4 +1,4 @@
-import { ICourse, IStudent } from "../types";
+import { ICourse } from "../types";
 import { DataStorageService } from "./DataStorageService";
 
 class CourseService {
@@ -9,23 +9,29 @@ class CourseService {
   }
 
   getCourses = async (_: Electron.IpcMainInvokeEvent): Promise<ICourse[]> => {
-    console.log("GET: courses");
-    return this.dsService.getDbFileContent<ICourse>("courses");
+    const statement = this.dsService
+      .getDatabase()
+      .prepare("SELECT * FROM Courses");
+
+    const courses = statement.all() as ICourse[];
+
+    return courses;
   };
 
   addCourse = async (_: Electron.IpcMainInvokeEvent, course: ICourse) => {
-    console.log(`POST: Add course ${course.name}`);
+    const statement = this.dsService
+      .getDatabase()
+      .prepare(
+        "INSERT INTO Courses (id, name, abbreviation, description, collegeId) VALUES (?, ?, ?, ?, ?)"
+      );
 
-    const courses = this.dsService.getDbFileContent<ICourse>("courses");
-    const existingCourse = courses.find(
-      (existingCourse) => existingCourse.name === course.name
+    statement.run(
+      course.id,
+      course.name,
+      course.abbreviation,
+      course.description,
+      course.collegeId
     );
-
-    if (existingCourse) {
-      throw new Error(`Course with name ${course.name} already exists`);
-    }
-
-    this.dsService.appendDataToDbFile("courses", course);
 
     return course;
   };
@@ -34,21 +40,19 @@ class CourseService {
     _: Electron.IpcMainInvokeEvent,
     course: ICourse
   ): Promise<ICourse> => {
-    console.log(`PUT: Update course ${course.name}`);
+    const statement = this.dsService
+      .getDatabase()
+      .prepare(
+        "UPDATE Courses SET name = ?, abbreviation = ?, description = ?, collegeId = ?, WHERE id = ?"
+      );
 
-    const courses = this.dsService.getDbFileContent<ICourse>("courses");
-    const existingCourseIndex = courses.findIndex(
-      (existingCourse) => existingCourse.id === course.id
+    statement.run(
+      course.name,
+      course.abbreviation,
+      course.description,
+      course.collegeId,
+      course.id
     );
-
-    if (existingCourseIndex === -1) {
-      throw new Error(`Course with id ${course.id} does not exist`);
-    }
-
-    const updatedCourses = [...courses];
-    updatedCourses[existingCourseIndex] = course;
-
-    this.dsService.updateDbFile("courses", updatedCourses);
 
     return course;
   };
@@ -57,29 +61,20 @@ class CourseService {
     _: Electron.IpcMainInvokeEvent,
     id: string
   ): Promise<ICourse> => {
-    console.log(`DELETE: Delete course ${id}`);
+    try {
+      const statement = this.dsService
+        .getDatabase()
+        .prepare<string>("DELETE FROM Courses WHERE id = ?");
 
-    const courses = this.dsService.getDbFileContent<ICourse>("courses");
-    const existingCourse = courses.find((course) => course.id === id);
+      statement.run(id);
 
-    if (!existingCourse) {
-      throw new Error(`Course with ID ${id} does not exist`);
+      return { id } as ICourse;
+    } catch (err) {
+      if (err.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+        throw new Error("You cannot delete a course that has students");
+      }
+      throw err;
     }
-
-    const students = this.dsService.getDbFileContent<IStudent>("students");
-    const hasStudents = students.some((student) => student.courseId === id);
-
-    if (hasStudents) {
-      throw new Error(
-        `Cannot delete course ${existingCourse.name} because it has students associated with it`
-      );
-    }
-
-    const filteredCourses = courses.filter((course) => course.id !== id);
-
-    this.dsService.updateDbFile("courses", filteredCourses);
-
-    return existingCourse;
   };
 }
 

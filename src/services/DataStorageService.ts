@@ -1,33 +1,64 @@
+import BetterSqlite3 from "better-sqlite3";
 import { app } from "electron";
 import fs from "fs";
 import { rm } from "node:fs/promises";
 import path from "path";
-import { DbFileName, dbFileNames } from "../constant/db";
-import * as parser from "../utils/parser";
 
 class DataStorageService {
-  test() {
-    console.log("test");
+  private db: BetterSqlite3.Database;
+
+  constructor(dbFileName: string) {
+    this.db = new BetterSqlite3(dbFileName);
   }
 
-  createDbTextFiles() {
-    console.log("Creating DB text files");
+  getDatabase(): BetterSqlite3.Database {
+    return this.db;
+  }
 
-    const fileNames = Object.values(dbFileNames);
-    const dbDirectory = path.join(app.getPath("userData"), "db");
+  createTables() {
+    console.log("Creating Database");
 
-    console.log(`DB directory: ${dbDirectory}`);
+    const collegeExec = this.db.prepare(`
+    CREATE TABLE IF NOT EXISTS Colleges (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      abbreviation TEXT NOT NULL,
+      logo TEXT NOT NULL
+    )`);
 
-    if (!fs.existsSync(dbDirectory)) {
-      fs.mkdirSync(dbDirectory);
-    }
+    const courseExec = this.db.prepare(`
+    CREATE TABLE IF NOT EXISTS Courses (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      abbreviation TEXT NOT NULL,
+      description TEXT NOT NULL,
+      collegeId TEXT NOT NULL,
+      FOREIGN KEY (collegeId) REFERENCES Colleges(id)
+    )`);
 
-    fileNames.forEach((fileName) => {
-      const filePath = path.join(dbDirectory, fileName);
-      this.createDbFile(filePath);
-    });
+    const studentExec = this.db.prepare(`
+    CREATE TABLE IF NOT EXISTS Students (
+      id TEXT PRIMARY KEY,
+      studentId TEXT NOT NULL,
+      firstName TEXT NOT NULL,
+      lastName TEXT NOT NULL,
+      gender TEXT CHECK (gender IN ('Male', 'Female', 'Other')) NOT NULL,
+      birthday TEXT NOT NULL,
+      photo TEXT NOT NULL,
+      collegeId TEXT NOT NULL,
+      courseId TEXT NOT NULL,
+      year TEXT NOT NULL,
+      FOREIGN KEY (collegeId) REFERENCES Colleges(id),
+      FOREIGN KEY (courseId) REFERENCES Courses(id)
+    )`);
 
-    console.log("Finished creating DB text files");
+    this.db.transaction(() => {
+      collegeExec.run();
+      courseExec.run();
+      studentExec.run();
+    })();
+
+    console.log("Finished creating Database");
   }
 
   createStorageDirectory() {
@@ -69,43 +100,6 @@ class DataStorageService {
     }
 
     console.log(`Finished deleting subdirectory ${subDirectory}`);
-  }
-
-  createDbFile(filePath: string) {
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, "");
-    }
-  }
-
-  getDbFilePath(fileName: DbFileName) {
-    const dbDirectory = path.join(app.getPath("userData"), "db");
-    const filePath = path.join(dbDirectory, dbFileNames[fileName]);
-    return filePath;
-  }
-
-  getDbFileContent<T>(fileName: DbFileName): T[] {
-    const filePath = this.getDbFilePath(fileName);
-    const fileContent = fs.readFileSync(filePath, "utf-8");
-    const split = fileContent.split("\n");
-    const data = split
-      .filter((line) => line !== "")
-      .map((line) => parser.decode<T>(line));
-    return data;
-  }
-
-  appendDataToDbFile<T>(fileName: DbFileName, data: T) {
-    const encoded = parser.encode(data);
-    const filePath = this.getDbFilePath(fileName);
-    fs.appendFileSync(filePath, `${encoded}\n`);
-  }
-
-  updateDbFile<T>(fileName: DbFileName, data: T[]) {
-    const filePath = this.getDbFilePath(fileName);
-    fs.writeFileSync(filePath, "");
-
-    data.forEach((data) => {
-      this.appendDataToDbFile(fileName, data);
-    });
   }
 }
 
